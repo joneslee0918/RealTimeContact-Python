@@ -33,11 +33,6 @@ async def test_record_items():
         contract_definition=engine_contract_definition)
 
     # Create contract Objects to interact with.
-    market_contract = StarknetContract(
-        starknet=starknet,
-        abi=market_contract_definition.abi,
-        contract_address=market_contract_address,
-    )
     engine_contract = StarknetContract(
         starknet=starknet,
         abi=engine_contract_definition.abi,
@@ -59,6 +54,7 @@ async def test_record_items():
     user_money_pre = 300
     user_item_pre = 55
     # Market has lots of money, not a lot of the item it is receiving.
+    # This will use override
     market_item_pre = 10
     market_money_pre = 12000
     # Set action (buy=0, sell=1)
@@ -114,4 +110,11 @@ async def test_record_items():
     units_post = post_trade_user[0] + post_trade_user[item_id] \
         + post_trade_market[0] + post_trade_market[1]
     assert units_pre == units_post
+
+    (random_item, random_money) = await engine_contract.check_market_state(
+        10, 2, 1).invoke()
+    assert random_money != 0
+
+
+
 

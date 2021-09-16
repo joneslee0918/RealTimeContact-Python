@@ -1,6 +1,0 @@
-#!/bin/bash
-set -eu
-
-pytest testing/GameEngineV1_contract_test.py
-
-pytest testing/MarketMaker_contract_test.py
