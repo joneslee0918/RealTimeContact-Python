@@ -1,25 +1,30 @@
 %lang starknet
-%builtins pedersen range_check
+%builtins pedersen range_check bitwise
 
-from starkware.cairo.common.cairo_builtins import HashBuiltin
-from starkware.cairo.common.math import unsigned_div_rem
-from starkware.cairo.common.dict import dict_write, dict_read
-from starkware.cairo.common.default_dict import default_dict_new, default_dict_finalize
+from starkware.cairo.common.cairo_builtins import HashBuiltin, BitwiseBuiltin
+from starkware.cairo.common.math import assert_nn_le, unsigned_div_rem, assert_not_zero
+from starkware.cairo.common.math_cmp import is_nn_le
+from starkware.cairo.common.hash_state import hash_init, hash_update, HashState
+from starkware.cairo.common.alloc import alloc
 from starkware.starknet.common.syscalls import get_caller_address
 
-from contracts.l2.settling_game.utils.interfaces import IModuleController
-from contracts.l2.tokens.IERC20 import IERC20
+from contracts.settling_game.utils.general import scale
+from contracts.settling_game.utils.interfaces import IModuleController
 
-# #### Module 02 #####
-#
-# This module controls the state of 01A
-#
+# #### Module 1A #####
+# Base settling contract
+# Consumes a Realm
+# Sets users stake time
 ####################
 
+# ########### Game state ############
+
+# Stores the address of the ModuleController.
 @storage_var
 func controller_address() -> (address : felt):
 end
 
+# ########### Admin Functions for Testing ############
 # Called on deployment only.
 @constructor
 func constructor{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
@@ -29,13 +34,6 @@ func constructor{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_p
     return ()
 end
 
-# Called by another module to update a global variable.
-@external
-func update_value{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}():
-    # TODO Customise.
-    only_approved()
-    return ()
-end
 # Checks write-permission of the calling contract.
 func only_approved{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}():
     # Get the address of the module trying to write to this contract.
