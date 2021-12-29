@@ -75,8 +75,7 @@ async def marketplace_factory():
         constructor_calldata=[
             str_to_felt("Realms"),  # name
             str_to_felt("Realms"),                 # ticker
-            accounts[0].contract_address,   # contract_owner
-            lords.contract_address        # currency_address
+            accounts[0].contract_address,           # contract_owner
         ])
 
     marketplace = await starknet.deploy(
