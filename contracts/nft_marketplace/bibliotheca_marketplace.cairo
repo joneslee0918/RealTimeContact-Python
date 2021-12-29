@@ -17,18 +17,12 @@ from contracts.token.IERC721 import IERC721
 func token_listings(token_type : felt) -> (balance : felt):
 end
 
-struct TradeStatus:
-    member Open : felt
-    member Executed : felt
-    member Cancelled : felt
-end
-
 struct Trade:
     member item : Uint256
     member expiration : felt
-    member price : felt
+    member price : felt 
     member poster : felt
-    member status : felt # from TradeStatus
+    member status : felt # 0 = Open, 1 = Executed, 2 = Cancelled
 end
 
 # Indexed list of all trades
@@ -58,11 +52,11 @@ end
 
 @constructor
 func constructor{
-        syscall_ptr : felt*,
+        syscall_ptr : felt*, 
         pedersen_ptr : HashBuiltin*,
         range_check_ptr
     }(
-        address_of_currency_token: felt,
+        address_of_currency_token: felt, 
         address_of_realms: felt
     ):
         currency_token_address.write(address_of_currency_token)
@@ -91,7 +85,7 @@ func open_trade{
     assert owner_of = caller
     assert is_approved = 1
 
-    _trades.write(trade_count, Trade(item=_item, expiration=_expiration, price=_price, poster=caller, status=TradeStatus.Open))
+    _trades.write(trade_count, Trade(item=_item, expiration=_expiration, price=_price, poster=caller, status=0))
     trade_counter.write(trade_count + 1)
 
     return ()
@@ -106,14 +100,14 @@ func execute_trade{
 
     let (realms) = realms_address.read()
     let (currency) = currency_token_address.read()
-
+    
     let (caller) = get_caller_address()
     let (contract_address) = get_contract_address()
     let (trade) = _trades.read(_trade)
     let (fee_bips) = protocol_fee_bips.read()
-
-    assert trade.status = TradeStatus.Open
-
+    # Require trade to be Open
+    assert trade.status = 0
+   
    # TODO assert expiration not over (requires StarkNet timestamps)
 
     # Fee is paid by seller
@@ -125,7 +119,7 @@ func execute_trade{
 
     IERC721.transferFrom(realms, trade.poster, caller, trade.item)
 
-    _trades.write(_trade, Trade(item=trade.item, expiration=trade.expiration, price=trade.price, poster=trade.poster, status=TradeStatus.Executed))
+    _trades.write(_trade, Trade(item=trade.item, expiration=trade.expiration, price=trade.price, poster=trade.poster, status=1))
 
     return ()
 end
@@ -136,11 +130,11 @@ func update_price{
     pedersen_ptr : HashBuiltin*,
     range_check_ptr
   }(_trade : felt, _price: felt):
-
+    
     let (caller) = get_caller_address()
     let (trade) = _trades.read(_trade)
-
-    assert trade.status = TradeStatus.Open
+    # Require trade to be Open
+    assert trade.status = 0
 
     # Require caller to be the poster of the trade
     assert caller = trade.poster
@@ -161,22 +155,22 @@ func cancel_trade{
 
     let (caller) = get_caller_address()
     let (trade) = _trades.read(_trade)
-
-    assert trade.status = TradeStatus.Open
+    # Require trade to be Open
+    assert trade.status = 0
 
     # Require caller to be the poster of the trade
     assert caller = trade.poster
 
    # TODO assert expiration not over (requires StarkNet timestamps)
 
-    _trades.write(_trade, Trade(item=trade.item, expiration=trade.expiration, price=trade.price, poster=trade.poster, status=TradeStatus.Cancelled))
+    _trades.write(_trade, Trade(item=trade.item, expiration=trade.expiration, price=trade.price, poster=trade.poster, status=2))
 
     return ()
 end
 
 @view
 func get_trade{
-        syscall_ptr : felt*,
+        syscall_ptr : felt*, 
         pedersen_ptr : HashBuiltin*,
         range_check_ptr
     }(idx: felt) -> (trade: Trade):
@@ -184,7 +178,7 @@ func get_trade{
 end
 @view
 func get_trades_by_token{
-        syscall_ptr : felt*,
+        syscall_ptr : felt*, 
         pedersen_ptr : HashBuiltin*,
         range_check_ptr
     }(idx: felt) -> (trade: Trade):
@@ -193,7 +187,7 @@ end
 
 @view
 func get_trade_counter{
-        syscall_ptr : felt*,
+        syscall_ptr : felt*, 
         pedersen_ptr : HashBuiltin*,
         range_check_ptr
     }() -> (trade_counter: felt):
@@ -206,8 +200,8 @@ func get_trade_status{
         syscall_ptr : felt*, pedersen_ptr : HashBuiltin*,
         range_check_ptr
         }(idx: felt) -> (status : felt):
-    let (trade) = _trades.read(idx)
-    return (trade.status)
+    let (filled) = _trades.read(idx)
+    return (filled.status)
 end
 
 # Returns a trades token
