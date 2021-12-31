@@ -1,11 +1,17 @@
 import pytest
 import asyncio
 import random
+from utils import Signer, uint, str_to_felt, MAX_UINT256, assert_revert
 from fixtures.account import account_factory
 
 NUM_SIGNING_ACCOUNTS = 2
-
+signer = Signer(123456789987654321)
 # Params
+first_token_id = (5042, 0)
+second_token_id = (7921, 1)
+third_token_id = (0, 13)
+
+initial_supply = 1000000 * (10 ** 18)
 
 
 @pytest.fixture(scope='module')
@@ -18,6 +24,37 @@ async def game_factory(account_factory):
     (starknet, accounts, signers) = account_factory
     admin_key = signers[0]
     admin_account = accounts[0]
+    treasury_account = accounts[1]
+
+    # ERC Contracts
+    lords = await starknet.deploy(
+        source="contracts/token/ERC20_Mintable.cairo",
+        constructor_calldata=[
+            str_to_felt("Lords"),     # name
+            str_to_felt("LRD"),       # symbol
+            *uint(initial_supply),                # initial supply
+            accounts[0].contract_address,
+            accounts[0].contract_address   # recipient
+        ]
+    )
+
+    realms = await starknet.deploy(
+        source="contracts/settling_game/Realms_ERC721_Mintable.cairo",
+        constructor_calldata=[
+            str_to_felt("Realms"),  # name
+            str_to_felt("Realms"),                 # ticker
+            admin_account.contract_address,           # contract_owner
+        ])
+
+    resources = await starknet.deploy(
+        source="contracts/token/ERC1155/ERC1155_Mintable.cairo",
+        constructor_calldata=[
+            admin_account.contract_address,
+            2,
+            1, 2,
+            2,
+            1000, 5000
+        ])
 
     # The Controller is the only unchangeable contract.
     # First deploy Arbiter.
@@ -25,21 +62,27 @@ async def game_factory(account_factory):
     # Then save the controller address in the Arbiter.
     # Then deploy Controller address during module deployments.
     arbiter = await starknet.deploy(
-        source="contracts/l2/settling_game/Arbiter.cairo",
+        source="contracts/settling_game/Arbiter.cairo",
         constructor_calldata=[admin_account.contract_address])
     controller = await starknet.deploy(
-        source="contracts/l2/settling_game/ModuleController.cairo",
-        constructor_calldata=[arbiter.contract_address])
+        source="contracts/settling_game/ModuleController.cairo",
+        constructor_calldata=[arbiter.contract_address, lords.contract_address, resources.contract_address, realms.contract_address, treasury_account.contract_address])
     await admin_key.send_transaction(
         account=admin_account,
         to=arbiter.contract_address,
         selector_name='set_address_of_controller',
         calldata=[controller.contract_address])
     settling_logic = await starknet.deploy(
-        source="contracts/l2/settling_game/01A_Settling.cairo",
+        source="contracts/settling_game/01A_Settling.cairo",
         constructor_calldata=[controller.contract_address])
     settling_state = await starknet.deploy(
-        source="contracts/l2/settling_game/01B_Settling.cairo",
+        source="contracts/settling_game/01B_Settling.cairo",
+        constructor_calldata=[controller.contract_address])
+    resources_logic = await starknet.deploy(
+        source="contracts/settling_game/02A_Resources.cairo",
+        constructor_calldata=[controller.contract_address])
+    resources_state = await starknet.deploy(
+        source="contracts/settling_game/02B_Resources.cairo",
         constructor_calldata=[controller.contract_address])
     # The admin key controls the arbiter. Use it to have the arbiter
     # set the module deployment addresses in the controller.
@@ -49,20 +92,92 @@ async def game_factory(account_factory):
         to=arbiter.contract_address,
         selector_name='batch_set_controller_addresses',
         calldata=[
-            settling_logic.contract_address, settling_state.contract_address])
-    return starknet, accounts, signers, arbiter, controller, settling_logic, settling_state
+            settling_logic.contract_address, settling_state.contract_address, resources_logic.contract_address, resources_state.contract_address])
+
+    return starknet, accounts, signers, arbiter, controller, settling_logic, settling_state, realms, resources, lords, resources_logic, resources_state
+
+#
+# Mint Realms to Owner
+#
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('tokens, number_of_tokens', [
+    [first_token_id, 1]
+])
 @pytest.mark.parametrize('account_factory', [dict(num_signers=NUM_SIGNING_ACCOUNTS)], indirect=True)
-async def test_account_unique(game_factory):
-    starknet, accounts, signers, arbiter, controller, \
-        settling_logic, settling_state = game_factory
-    # Test the account deployments.
-    admin_pub = await accounts[0].get_public_key().call()
-    assert admin_pub.result == (signers[0].public_key,)
-    user_1_pub = await accounts[1].get_public_key().call()
-    assert user_1_pub.result == (signers[1].public_key,)
-    assert signers[0].public_key != signers[1].public_key
-    print(f'Signer 0 - {signers[0].public_key} ')
-    print(f'Signer 1 - {signers[1].public_key} ')
+async def test_mint(game_factory, number_of_tokens, tokens):
+    starknet, accounts, signers, arbiter, controller, settling_logic, settling_state, realms, resources, lords, resources_logic, resources_state = game_factory
+
+    await signer.send_transaction(
+        accounts[0], realms.contract_address, 'mint', [
+            accounts[0].contract_address, *tokens, 2123, 3961408168602764362449331946503]
+    )
+
+    realm_info = await realms.get_realm_info(uint(5042)).call()
+    print(f'Realm Info: {realm_info.result.realm_data}')
+
+    unpacked_realm_info = await realms.fetch_realm_data(uint(5042)).call()
+    print(
+        f'Unpacked Realm Info at: {unpacked_realm_info.result.realm_stats}')
+
+    execution_info = await realms.balanceOf(accounts[0].contract_address).call()
+    print(f'Realms Balance for owner is: {execution_info.result.balance}')
+
+    # settle Realm
+    await signer.send_transaction(
+        account=accounts[0], to=settling_logic.contract_address, selector_name='settle', calldata=[*uint(5042)]
+    )
+
+    # claim resources
+    await signer.send_transaction(
+        account=accounts[0], to=resources_logic.contract_address, selector_name='claim_resources', calldata=[*uint(5042)]
+    )
+
+    
+
+
+
+    player_resource_value = await resources.balanceOf(accounts[0].contract_address, 5).call()
+    player_resource_value_10 = await resources.balanceOf(accounts[0].contract_address, 10).call()
+    player_resource_value_12 = await resources.balanceOf(accounts[0].contract_address, 12).call()
+    player_resource_value_21 = await resources.balanceOf(accounts[0].contract_address, 21).call()
+    player_resource_value_9 = await resources.balanceOf(accounts[0].contract_address, 9).call()
+    print(
+        f'Resource 5 Balance for player is: {player_resource_value.result.balance}')
+    print(
+        f'Resource 10 Balance for player is: {player_resource_value_10.result.balance}')
+    print(
+        f'Resource 12 Balance for player is: {player_resource_value_12.result.balance}')
+    print(
+        f'Resource 21 Balance for player is: {player_resource_value_21.result.balance}')
+    print(
+        f'Resource 9 Balance for player is: {player_resource_value_9.result.balance}') 
+
+    player_resource_value_5 = await resources.balanceOf(accounts[1].contract_address, 5).call()
+
+    # set resource upgrade IDS
+    await signer.send_transaction(
+        account=accounts[0], to=resources_state.contract_address, selector_name='set_resource_upgrade_ids', calldata=[5, 47408855671157818132997]
+    )
+
+    await signer.send_transaction(
+        account=accounts[0], to=resources_logic.contract_address, selector_name='upgrade_resource', calldata=[*uint(5042), 
+        5, 5, 5, 10, 12, 21, 9, 5, 10,10,10,10,10]
+    )
+
+    _player_resource_value = await resources.balanceOf(accounts[0].contract_address, 5).call()
+    _player_resource_value_10 = await resources.balanceOf(accounts[0].contract_address, 10).call()
+    _player_resource_value_12 = await resources.balanceOf(accounts[0].contract_address, 12).call()
+    _player_resource_value_21 = await resources.balanceOf(accounts[0].contract_address, 21).call()
+    _player_resource_value_9 = await resources.balanceOf(accounts[0].contract_address, 9).call()
+    print(
+        f'Resource 5 Balance for player is: {_player_resource_value.result.balance}')
+    print(
+        f'Resource 10 Balance for player is: {_player_resource_value_10.result.balance}')
+    print(
+        f'Resource 12 Balance for player is: {_player_resource_value_12.result.balance}')
+    print(
+        f'Resource 21 Balance for player is: {_player_resource_value_21.result.balance}')
+    print(
+        f'Resource 9 Balance for player is: {_player_resource_value_9.result.balance}') 
