@@ -21,20 +21,10 @@ from contracts.Ownable_base import Ownable_initializer, Ownable_only_owner
 #
 
 @constructor
-func constructor{
-        syscall_ptr : felt*, 
-        pedersen_ptr : HashBuiltin*,
-        range_check_ptr
-    }(
-        name: felt,
-        symbol: felt,
-        owner: felt,
-        currency_address: felt
-    ):
+func constructor{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+        name : felt, symbol : felt, owner : felt):
     ERC721_initializer(name, symbol)
     Ownable_initializer(owner)
-    currency_token_address.write(currency_address)
-
     return ()
 end
 
