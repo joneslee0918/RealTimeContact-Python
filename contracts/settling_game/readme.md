@@ -181,7 +181,7 @@ end
 
 #### Pack binary bits
 
-Define our large the mask is needed for a value.
+Define how large the mask is needed for a value.
 
 We will use rivers as an example since it's highest value is 60, which equates to 7 bits. So we will use an 8 bit mask on all values to keep things consistent (this could be what ever you like)
 
@@ -206,7 +206,7 @@ resource_7 = 00000000
 wonder = 00110010
 order = 00000010
 
-Then concatanate the values
+Then concatenate the values
 
 0000001000110010000000000000000000000101000001000000001100000010000000010000010100001010001111000000000100000111
 ```
@@ -220,7 +220,7 @@ Then convert to decimal and this is the realms traits to store in the felt:
 Then this function will unpack the the decimal into bits
 
 ```
-unpack_realm_data()
+unpack_data()
 ```
 
 
@@ -269,12 +269,3 @@ resource_5_values = 000000001010
 
 2815437129687050
 ```
-
-## Calculator Logic Module
-
-'Storage is expensive, compute is cheap' - I wise man one said this... (@eth_worm)
-
-Calldata will always be expensive on decentralised blockchain. StarkNet allows cheap computation, so where possible we should always compute the value rather than save in the state.
-
-Settling of the Realms contains many computed values that get parsed around the dapp. The calculations for all these should be maintained within a central calculator logic contract. This contract contains no state at all, and can be upgraded easily.
-
