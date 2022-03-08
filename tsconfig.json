@@ -8,13 +8,6 @@
         "outDir": "dist",
         "resolveJsonModule": true
     },
-    "ts-node": {
-        "transpileOnly": true,
-        "files": true,
-        "compilerOptions": {
-            "rootDir": "."
-        }
-    },
     "include": [
         "./scripts",
         "./test",
