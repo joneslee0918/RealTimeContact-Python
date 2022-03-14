@@ -1,13 +1,7 @@
-# SPDX-License-Identifier: MIT
-# OpenZeppelin Cairo Contracts v0.1.0 (account/IAccount.cairo)
-
 %lang starknet
-
-from contracts.openzeppelin.account.Account import AccountCallArray
 
 @contract_interface
 namespace IAccount:
-
     #
     # Getters
     #
@@ -26,9 +20,9 @@ namespace IAccount:
         ):
     end
 
-    func __execute__(
-            call_array_len: felt,
-            call_array: AccountCallArray*,
+    func execute(
+            to: felt,
+            selector: felt,
             calldata_len: felt,
             calldata: felt*,
             nonce: felt
