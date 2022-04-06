@@ -1,0 +1,20 @@
+name: test
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container: ghcr.io/dopedao/ryo:latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: install extra python dependencies
+        run: pip3 install -U 'pytest-xdist[psutil]' dill cairo-lang==0.8.0 cairo-nile==0.5.0
+      - name: compile
+        run: bin/compile
+      - name: test
+        run: bin/test
